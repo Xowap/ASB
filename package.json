@@ -1,0 +1,13 @@
+{
+  "name": "asb",
+  "version": "0.1.0",
+  "description": "Abstract Syntax Bonsaï",
+  "main": "index.js",
+  "author": "Rémy Sanchez <remy@delos.ltd>",
+  "license": "WTFPL",
+  "dependencies": {
+    "argparse": "^1.0.10",
+    "css": "^2.2.3",
+    "fs-extra": "^7.0.0"
+  }
+}

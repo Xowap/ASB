@@ -111,14 +111,15 @@ class MediaQuery extends StringEater {}
  */
 class Selector extends StringEater {}
 
+
 /**
- * Handles property tokens.
+ * Handles Puffman-encoded tokens.
  *
  * We're not dealing with raw strings here, but rather with Huffman-coded
  * tokens. The tree is either computed from AST (at compression time) or from
  * serialized data found as a preamble in the file (at decompression time).
  */
-class Prop {
+class PuffEater {
     constructor({bitbuf}) {
         this.puffman = new Puffman();
         this.bitbuf = bitbuf;
@@ -127,29 +128,12 @@ class Prop {
     /**
      * Runs the AST to find out about tokens and their frequency of apparition.
      *
+     * You need to implement this on your own.
+     *
      * @param ast {object} CSS's AST
      */
     loadFromAst(ast) {
-        const blocks = groupBlocks(ast);
-
-        for (const block of blocks) {
-            if (block.type === 'media') {
-                for (const rule of block.rules) {
-                    for (const declaration of rule.declarations) {
-                        if (declaration.type !== 'declaration') {
-                            continue;
-                        }
-
-                        this.puffman.see(declaration.property);
-                    }
-
-                    this.puffman.see(EOT);
-                }
-            }
-        }
-
-        this.puffman.buildTree();
-        this.puffman.buildMapToBin();
+        throw new Error('not implemented');
     }
 
     /**
@@ -193,9 +177,58 @@ class Prop {
 }
 
 /**
+ * Handles prop tokens
+ */
+class Prop extends PuffEater {
+    loadFromAst(ast) {
+        const blocks = groupBlocks(ast);
+
+        for (const block of blocks) {
+            if (block.type === 'media') {
+                for (const rule of block.rules) {
+                    for (const declaration of rule.declarations) {
+                        if (declaration.type !== 'declaration') {
+                            continue;
+                        }
+
+                        this.puffman.see(declaration.property);
+                    }
+
+                    this.puffman.see(EOT);
+                }
+            }
+        }
+
+        this.puffman.buildTree();
+        this.puffman.buildMapToBin();
+    }
+}
+
+/**
  * Handles value tokens
  */
-class Value extends StringEater {}
+class Value extends PuffEater {
+    loadFromAst(ast) {
+        const blocks = groupBlocks(ast);
+
+        for (const block of blocks) {
+            if (block.type === 'media') {
+                for (const rule of block.rules) {
+                    for (const declaration of rule.declarations) {
+                        if (declaration.type !== 'declaration') {
+                            continue;
+                        }
+
+                        this.puffman.see(declaration.value);
+                    }
+                }
+            }
+        }
+
+        this.puffman.buildTree();
+        this.puffman.buildMapToBin();
+    }
+}
 
 /**
  * Handles raw block tokens
@@ -306,6 +339,9 @@ function dump({ast, bitbuf}) {
     prop.loadFromAst(ast);
     prop.serializePreamble();
 
+    value.loadFromAst(ast);
+    value.serializePreamble();
+
     const blocks = groupBlocks(ast);
 
     for (const block of blocks) {
@@ -353,6 +389,7 @@ function restore({bitbuf}) {
         buildEaters({bitbuf});
 
     prop.loadFromPreamble();
+    value.loadFromPreamble();
 
     const blocks = [];
 

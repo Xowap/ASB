@@ -2,6 +2,9 @@ const css = require('css');
 const {Puffman} = require('./puffman');
 
 
+const EOT = String.fromCharCode(0x04);
+
+
 /**
  * A simple eater that will write down null-terminated string and decode them.
  * That's not performing any compression but is useful to test the concept
@@ -140,7 +143,7 @@ class Prop {
                         this.puffman.see(declaration.property);
                     }
 
-                    this.puffman.see('\e');
+                    this.puffman.see(EOT);
                 }
             }
         }
@@ -289,8 +292,8 @@ function groupBlocks(ast) {
  * token:
  *
  * - A "end" block type means the file is finished
- * - A "\e" selector means that we're moving into the rule set
- * - A "\e" prop means that there is no more props
+ * - A "EOT" selector means that we're moving into the rule set
+ * - A "EOT" prop means that there is no more props
  * - An empty selector list means the end of a media query block
  *
  * @param ast {object} the AST of the CSS file you're encoding
@@ -316,7 +319,7 @@ function dump({ast, bitbuf}) {
                     selector.dump(s);
                 }
 
-                selector.dump('\e');
+                selector.dump(EOT);
 
                 for (const declaration of rule.declarations) {
                     if (declaration.type !== 'declaration') {
@@ -327,10 +330,10 @@ function dump({ast, bitbuf}) {
                     value.dump(declaration.value);
                 }
 
-                prop.dump('\e');
+                prop.dump(EOT);
             }
 
-            selector.dump('\e');
+            selector.dump(EOT);
         } else if (block.type === 'raw') {
             rawBlock.dump(block.contents);
         }
@@ -364,7 +367,7 @@ function restore({bitbuf}) {
                 const selectors = [];
                 let sel;
 
-                while ((sel = selector.eat()) !== '\e') {
+                while ((sel = selector.eat()) !== EOT) {
                     selectors.push(sel);
                 }
 
@@ -375,7 +378,7 @@ function restore({bitbuf}) {
                 const props = [];
                 let p;
 
-                while ((p = prop.eat()) !== '\e') {
+                while ((p = prop.eat()) !== EOT) {
                     const v = value.eat();
                     props.push({p, v})
                 }

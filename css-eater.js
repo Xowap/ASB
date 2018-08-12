@@ -100,12 +100,6 @@ class BlockType {
     }
 }
 
-
-/**
- * Handles media query tokens
- */
-class MediaQuery extends StringEater {}
-
 /**
  * Handles selector tokens
  */
@@ -230,6 +224,26 @@ class Value extends PuffEater {
     }
 }
 
+
+/**
+ * Handles media query tokens
+ */
+class MediaQuery extends PuffEater {
+    loadFromAst(ast) {
+        const blocks = groupBlocks(ast);
+
+        for (const block of blocks) {
+            if (block.type === 'media') {
+                this.puffman.see(block.media);
+            }
+        }
+
+        this.puffman.buildTree();
+        this.puffman.buildMapToBin();
+    }
+}
+
+
 /**
  * Handles raw block tokens
  */
@@ -342,6 +356,9 @@ function dump({ast, bitbuf}) {
     value.loadFromAst(ast);
     value.serializePreamble();
 
+    mediaQuery.loadFromAst(ast);
+    mediaQuery.serializePreamble();
+
     const blocks = groupBlocks(ast);
 
     for (const block of blocks) {
@@ -390,6 +407,7 @@ function restore({bitbuf}) {
 
     prop.loadFromPreamble();
     value.loadFromPreamble();
+    mediaQuery.loadFromPreamble();
 
     const blocks = [];
 

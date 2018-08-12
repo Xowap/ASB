@@ -1,4 +1,5 @@
 const css = require('css');
+const {Puffman} = require('./puffman');
 
 
 /**
@@ -35,12 +36,7 @@ class StringEater {
      * @param string {string} string to encode
      */
     dump(string) {
-        const buf = new Buffer(string);
-
-        for (const octet of buf) {
-            this.bitbuf.writeOctet(octet);
-        }
-
+        this.bitbuf.writeString(string);
         this.bitbuf.writeOctet(0);
     }
 }
@@ -113,9 +109,85 @@ class MediaQuery extends StringEater {}
 class Selector extends StringEater {}
 
 /**
- * Handles property tokens
+ * Handles property tokens.
+ *
+ * We're not dealing with raw strings here, but rather with Huffman-coded
+ * tokens. The tree is either computed from AST (at compression time) or from
+ * serialized data found as a preamble in the file (at decompression time).
  */
-class Prop extends StringEater {}
+class Prop {
+    constructor({bitbuf}) {
+        this.puffman = new Puffman();
+        this.bitbuf = bitbuf;
+    }
+
+    /**
+     * Runs the AST to find out about tokens and their frequency of apparition.
+     *
+     * @param ast {object} CSS's AST
+     */
+    loadFromAst(ast) {
+        const blocks = groupBlocks(ast);
+
+        for (const block of blocks) {
+            if (block.type === 'media') {
+                for (const rule of block.rules) {
+                    for (const declaration of rule.declarations) {
+                        if (declaration.type !== 'declaration') {
+                            continue;
+                        }
+
+                        this.puffman.see(declaration.property);
+                    }
+
+                    this.puffman.see('\e');
+                }
+            }
+        }
+
+        this.puffman.buildTree();
+        this.puffman.buildMapToBin();
+    }
+
+    /**
+     * Unserializes the tree from the preamble
+     */
+    loadFromPreamble() {
+        this.puffman.unserialize(this.bitbuf);
+    }
+
+    /**
+     * Serializes the tree into the preamble
+     */
+    serializePreamble() {
+        this.puffman.tree.serialize(this.bitbuf);
+    }
+
+    /**
+     * Uses the Puffman map to dump this token's bits into the buffer
+     *
+     * Please note that the buffer has to have been observed before for this
+     * to work.
+     *
+     * @param token {string}
+     */
+    dump(token) {
+        const bin = this.puffman.mapToBin[token];
+
+        for (const bit of bin) {
+            this.bitbuf.push(bit === '1' ? 1 : 0);
+        }
+    }
+
+    /**
+     * Determines the next token's content from the Puffman tree.
+     *
+     * @returns {string}
+     */
+    eat() {
+        return this.puffman.findToken(() => this.bitbuf.readBit());
+    }
+}
 
 /**
  * Handles value tokens
@@ -132,6 +204,7 @@ class RawBlock extends StringEater {}
  * Creates the eater instances
  *
  * @param bitbuf {BitBuf} bitbuf instance to read/write from/into
+ *
  * @returns {{
  *  mediaQuery: MediaQuery,
  *  blockType: BlockType,
@@ -148,6 +221,7 @@ function buildEaters({bitbuf}) {
     const prop = new Prop({bitbuf});
     const value = new Value({bitbuf});
     const rawBlock = new RawBlock({bitbuf});
+
     return {mediaQuery, blockType, selector, prop, value, rawBlock};
 }
 
@@ -226,6 +300,9 @@ function dump({ast, bitbuf}) {
     const {mediaQuery, blockType, selector, prop, value, rawBlock} =
         buildEaters({bitbuf});
 
+    prop.loadFromAst(ast);
+    prop.serializePreamble();
+
     const blocks = groupBlocks(ast);
 
     for (const block of blocks) {
@@ -271,6 +348,8 @@ function dump({ast, bitbuf}) {
 function restore({bitbuf}) {
     const {mediaQuery, blockType, selector, prop, value, rawBlock} =
         buildEaters({bitbuf});
+
+    prop.loadFromPreamble();
 
     const blocks = [];
 

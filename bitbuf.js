@@ -99,6 +99,37 @@ class BitBuf {
     }
 
     /**
+     * Encodes a string into UTF-8 and dumps it into the buffer
+     *
+     * @param string
+     */
+    writeString(string) {
+        const buf = new Buffer(string);
+
+        for (const octet of buf) {
+            this.writeOctet(octet);
+        }
+    }
+
+    /**
+     * Assuming `until` as end-of-string indicator (you can use something like
+     * 0 by example), returns the following string (without the EOS character).
+     *
+     * @param until {number} Character indicating the end of the string
+     * @returns {string}
+     */
+    readString(until) {
+        const values = [];
+        let octet;
+
+        while ((octet = this.readOctet()) !== until) {
+            values.push(octet);
+        }
+
+        return Buffer.from(values).toString('utf8');
+    }
+
+    /**
      * Decodes a full octet from the buffer and advances the reading position.
      *
      * @returns {number} the octet that was read
@@ -121,9 +152,9 @@ class BitBuf {
      * @returns {number} one bit
      */
     readBit() {
-        const octet = this.get(this.pos);
+        const bit = this.get(this.pos);
         this.pos += 1;
-        return octet;
+        return bit;
     }
 
     /**
